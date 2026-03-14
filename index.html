@@ -41,9 +41,14 @@
             </li>
           </ul>
 
-          <button class="btn btn-outline-primary" id="exportBackupBtn" type="button">
-            Xuất backup
-          </button>
+          <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-outline-secondary" id="themeToggleBtn" type="button">
+              Chế độ tối
+            </button>
+            <button class="btn btn-outline-primary" id="exportBackupBtn" type="button">
+              Xuất backup
+            </button>
+          </div>
         </div>
       </div>
     </nav>
@@ -104,12 +109,6 @@
         <div class="card shadow-sm border-0">
           <div class="card-body">
             <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-              <button class="btn btn-outline-secondary btn-nav-square" id="prevPracticeBtn" type="button">
-                &lt;
-              </button>
-              <button class="btn btn-outline-secondary btn-nav-square" id="nextPracticeBtn" type="button">
-                &gt;
-              </button>
               <button class="btn btn-primary" id="startPracticeBtn" type="button">Bắt đầu</button>
               <button class="btn btn-outline-secondary" id="resetPracticeBtn" type="button">Đặt lại</button>
             </div>
@@ -193,6 +192,56 @@
               <div>
                 <label class="form-label">Giây vần</label>
                 <input type="number" class="form-control" id="rhymeSecondsInput" min="0.2" step="0.1" />
+              </div>
+
+              <div class="mt-3">
+                <label class="form-label">Giây từ</label>
+                <input type="number" class="form-control" id="wordSecondsInput" min="0.2" step="0.1" />
+              </div>
+
+              <hr class="my-4" />
+
+              <div class="row g-3 align-items-end">
+                <div class="col-12 col-md-6">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="autoRunToggle" />
+                    <label class="form-check-label" for="autoRunToggle">Tự chạy</label>
+                  </div>
+                </div>
+
+                <div class="col-12 col-md-6">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="shuffleToggle" />
+                    <label class="form-check-label" for="shuffleToggle">Shuffle</label>
+                  </div>
+                </div>
+
+                <div class="col-12 col-md-4">
+                  <label class="form-label">Hiện trước</label>
+                  <select class="form-select" id="orderFirstSelect">
+                    <option value="initial">Chữ đầu</option>
+                    <option value="rhyme">Vần</option>
+                    <option value="word">Từ</option>
+                  </select>
+                </div>
+
+                <div class="col-12 col-md-4">
+                  <label class="form-label">Hiện thứ 2</label>
+                  <select class="form-select" id="orderSecondSelect">
+                    <option value="initial">Chữ đầu</option>
+                    <option value="rhyme">Vần</option>
+                    <option value="word">Từ</option>
+                  </select>
+                </div>
+
+                <div class="col-12 col-md-4">
+                  <label class="form-label">Hiện thứ 3</label>
+                  <select class="form-select" id="orderThirdSelect">
+                    <option value="initial">Chữ đầu</option>
+                    <option value="rhyme">Vần</option>
+                    <option value="word">Từ</option>
+                  </select>
+                </div>
               </div>
             </div>
             <div class="modal-footer">

@@ -1,5 +1,13 @@
 const RECORDS_KEY = "reading-bootstrap-records-v1";
 const TIMING_KEY = "reading-bootstrap-timing-v1";
+const PRACTICE_SETTINGS_KEY = "reading-bootstrap-practice-settings-v1";
+const THEME_KEY = "reading-bootstrap-theme-v1";
+const FIELD_OPTIONS = ["initial", "rhyme", "word"];
+const FIELD_META = {
+  initial: { label: "Chữ đầu", timingKey: "initialSeconds", final: false },
+  rhyme: { label: "Vần", timingKey: "rhymeSeconds", final: false },
+  word: { label: "Từ", timingKey: "wordSeconds", final: true }
+};
 
 const appState = {
   records: [],
@@ -7,12 +15,19 @@ const appState = {
   timing: {
     initialSeconds: 1,
     hideSeconds: 0.3,
-    rhymeSeconds: 1
+    rhymeSeconds: 1,
+    wordSeconds: 1
+  },
+  practiceSettings: {
+    autoRun: false,
+    shuffle: false,
+    stageOrder: ["initial", "rhyme", "word"]
   },
   practiceOrder: [],
   practicePointer: 0,
   currentRecordId: null,
   timers: [],
+  theme: "light",
   recordModal: null,
   timingModal: null
 };
@@ -43,6 +58,40 @@ function resetTimers() {
   appState.timers = [];
 }
 
+function savePracticeSettings() {
+  localStorage.setItem(PRACTICE_SETTINGS_KEY, JSON.stringify(appState.practiceSettings));
+}
+
+function saveTheme() {
+  localStorage.setItem(THEME_KEY, JSON.stringify(appState.theme));
+}
+
+function shuffleArray(items) {
+  const list = [...items];
+  for (let i = list.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [list[i], list[j]] = [list[j], list[i]];
+  }
+  return list;
+}
+
+function normalizeStageOrder(stageOrder) {
+  const unique = [];
+  stageOrder.forEach((value) => {
+    if (FIELD_OPTIONS.includes(value) && !unique.includes(value)) {
+      unique.push(value);
+    }
+  });
+
+  FIELD_OPTIONS.forEach((value) => {
+    if (!unique.includes(value)) {
+      unique.push(value);
+    }
+  });
+
+  return unique.slice(0, FIELD_OPTIONS.length);
+}
+
 function setScreen(screen) {
   $(".nav-screen-btn").removeClass("active");
   $(`.nav-screen-btn[data-screen="${screen}"]`).addClass("active");
@@ -60,7 +109,8 @@ function getPracticeSourceIds() {
 }
 
 function rebuildPracticeOrder(resetPointer = true) {
-  appState.practiceOrder = getPracticeSourceIds();
+  const sourceIds = getPracticeSourceIds();
+  appState.practiceOrder = appState.practiceSettings.shuffle ? shuffleArray(sourceIds) : sourceIds;
   if (resetPointer || appState.practicePointer >= appState.practiceOrder.length) {
     appState.practicePointer = 0;
   }
@@ -79,6 +129,20 @@ function renderTimingForm() {
   $("#initialSecondsInput").val(appState.timing.initialSeconds);
   $("#hideSecondsInput").val(appState.timing.hideSeconds);
   $("#rhymeSecondsInput").val(appState.timing.rhymeSeconds);
+  $("#wordSecondsInput").val(appState.timing.wordSeconds);
+}
+
+function renderPracticeSettings() {
+  $("#autoRunToggle").prop("checked", appState.practiceSettings.autoRun);
+  $("#shuffleToggle").prop("checked", appState.practiceSettings.shuffle);
+  $("#orderFirstSelect").val(appState.practiceSettings.stageOrder[0]);
+  $("#orderSecondSelect").val(appState.practiceSettings.stageOrder[1]);
+  $("#orderThirdSelect").val(appState.practiceSettings.stageOrder[2]);
+}
+
+function applyTheme() {
+  document.documentElement.setAttribute("data-theme", appState.theme);
+  $("#themeToggleBtn").text(appState.theme === "dark" ? "Chế độ sáng" : "Chế độ tối");
 }
 
 function renderSelectionSummary() {
@@ -149,13 +213,23 @@ function setPracticeButtons(enabled) {
   $(".practice-result-btn").prop("disabled", !enabled);
 }
 
+function getStageOrderLabels() {
+  return appState.practiceSettings.stageOrder.map((field) => FIELD_META[field].label).join(" -> ");
+}
+
+function maybeAutoRun() {
+  if (appState.practiceSettings.autoRun && appState.practiceOrder.length) {
+    runPractice();
+  }
+}
+
 function previewCurrentRecord() {
   resetTimers();
   setPracticeButtons(false);
 
   if (!appState.records.length) {
     appState.currentRecordId = null;
-    setStage("Sẵn sàng", "|");
+    setStage("Sẵn sàng", "");
     renderPracticeInfo("Chưa có dữ liệu luyện tập.");
     return;
   }
@@ -167,13 +241,13 @@ function previewCurrentRecord() {
   syncCurrentPracticeRecord();
   const record = getCurrentRecord();
   if (!record) {
-    setStage("Sẵn sàng", "|");
+    setStage("Sẵn sàng", "");
     renderPracticeInfo("Không tìm thấy record để luyện.");
     return;
   }
 
-  setStage("Sẵn sàng", "|");
-  renderPracticeInfo(`Chuẩn bị: ${record.initial} + ${record.rhyme} -> ${record.word}`);
+  setStage("Sẵn sàng", "");
+  renderPracticeInfo(`Chuẩn bị: ${record.initial} + ${record.rhyme} -> ${record.word} | thứ tự: ${getStageOrderLabels()}`);
 }
 
 function runPractice() {
@@ -193,40 +267,45 @@ function runPractice() {
     return;
   }
 
-  const initialMs = appState.timing.initialSeconds * 1000;
   const hideMs = appState.timing.hideSeconds * 1000;
-  const rhymeMs = appState.timing.rhymeSeconds * 1000;
+  const stageOrder = appState.practiceSettings.stageOrder;
 
   resetTimers();
   setPracticeButtons(false);
-  renderPracticeInfo(`Đang chạy: ${record.initial} + ${record.rhyme} -> ${record.word}`);
+  renderPracticeInfo(`Đang chạy: ${record.initial} + ${record.rhyme} -> ${record.word} | thứ tự: ${getStageOrderLabels()}`);
 
-  setStage("Chữ đầu", record.initial);
+  let elapsedMs = 0;
 
-  appState.timers.push(
-    setTimeout(() => {
-      setStage("Ẩn", "|", "hidden");
-    }, initialMs)
-  );
+  stageOrder.forEach((field, index) => {
+    const meta = FIELD_META[field];
+    const isLastStage = index === stageOrder.length - 1;
+    const durationMs = appState.timing[meta.timingKey] * 1000;
 
-  appState.timers.push(
-    setTimeout(() => {
-      setStage("Vần", record.rhyme);
-    }, initialMs + hideMs)
-  );
+    appState.timers.push(
+      setTimeout(() => {
+        setStage(meta.label, record[field], meta.final && isLastStage ? "final" : "");
+      }, elapsedMs)
+    );
 
-  appState.timers.push(
-    setTimeout(() => {
-      setStage("Ẩn", "|", "hidden");
-    }, initialMs + hideMs + rhymeMs)
-  );
+    if (isLastStage) {
+      appState.timers.push(
+        setTimeout(() => {
+          setPracticeButtons(true);
+        }, elapsedMs)
+      );
+      return;
+    }
 
-  appState.timers.push(
-    setTimeout(() => {
-      setStage("Chữ", record.word, "final");
-      setPracticeButtons(true);
-    }, initialMs + hideMs + rhymeMs + hideMs)
-  );
+    elapsedMs += durationMs;
+
+    appState.timers.push(
+      setTimeout(() => {
+        setStage("Ẩn", "", "hidden");
+      }, elapsedMs)
+    );
+
+    elapsedMs += hideMs;
+  });
 }
 
 function openRecordModal(record = null) {
@@ -310,8 +389,9 @@ function saveTimingFromForm() {
   const initialSeconds = Number($("#initialSecondsInput").val());
   const hideSeconds = Number($("#hideSecondsInput").val());
   const rhymeSeconds = Number($("#rhymeSecondsInput").val());
+  const wordSeconds = Number($("#wordSecondsInput").val());
 
-  if (initialSeconds <= 0 || hideSeconds <= 0 || rhymeSeconds <= 0) {
+  if (initialSeconds <= 0 || hideSeconds <= 0 || rhymeSeconds <= 0 || wordSeconds <= 0) {
     alert("Các giá trị thời gian phải lớn hơn 0.");
     return;
   }
@@ -319,10 +399,31 @@ function saveTimingFromForm() {
   appState.timing = {
     initialSeconds,
     hideSeconds,
-    rhymeSeconds
+    rhymeSeconds,
+    wordSeconds
   };
   saveTiming();
   appState.timingModal.hide();
+}
+
+function savePracticeSettingsFromForm() {
+  const stageOrder = normalizeStageOrder([
+    $("#orderFirstSelect").val(),
+    $("#orderSecondSelect").val(),
+    $("#orderThirdSelect").val()
+  ]);
+
+  appState.practiceSettings = {
+    autoRun: $("#autoRunToggle").is(":checked"),
+    shuffle: $("#shuffleToggle").is(":checked"),
+    stageOrder
+  };
+
+  renderPracticeSettings();
+  savePracticeSettings();
+  rebuildPracticeOrder();
+  previewCurrentRecord();
+  maybeAutoRun();
 }
 
 function toggleRowSelection(id, checked) {
@@ -336,20 +437,6 @@ function toggleRowSelection(id, checked) {
 
   rebuildPracticeOrder();
   renderTable();
-  previewCurrentRecord();
-}
-
-function setPointer(nextPointer) {
-  if (!appState.practiceOrder.length) {
-    rebuildPracticeOrder();
-  }
-  if (!appState.practiceOrder.length) {
-    previewCurrentRecord();
-    return;
-  }
-
-  appState.practicePointer = Math.max(0, Math.min(nextPointer, appState.practiceOrder.length - 1));
-  syncCurrentPracticeRecord();
   previewCurrentRecord();
 }
 
@@ -377,6 +464,7 @@ function markResult(type) {
   }
   syncCurrentPracticeRecord();
   previewCurrentRecord();
+  maybeAutoRun();
 }
 
 function exportBackup() {
@@ -409,16 +497,30 @@ function escapeHtml(value) {
 $(function () {
   appState.records = loadJson(RECORDS_KEY, []);
   appState.timing = { ...appState.timing, ...loadJson(TIMING_KEY, {}) };
+  appState.practiceSettings = {
+    ...appState.practiceSettings,
+    ...loadJson(PRACTICE_SETTINGS_KEY, {}),
+    stageOrder: normalizeStageOrder(loadJson(PRACTICE_SETTINGS_KEY, {}).stageOrder || appState.practiceSettings.stageOrder)
+  };
+  appState.theme = loadJson(THEME_KEY, "light") === "dark" ? "dark" : "light";
   appState.recordModal = new bootstrap.Modal(document.getElementById("recordModal"));
   appState.timingModal = new bootstrap.Modal(document.getElementById("timingModal"));
 
+  applyTheme();
   renderTimingForm();
+  renderPracticeSettings();
   rebuildPracticeOrder();
   renderTable();
   previewCurrentRecord();
 
   $(document).on("click", ".nav-screen-btn", function () {
     setScreen($(this).data("screen"));
+  });
+
+  $("#themeToggleBtn").on("click", function () {
+    appState.theme = appState.theme === "dark" ? "light" : "dark";
+    applyTheme();
+    saveTheme();
   });
 
   $("#exportBackupBtn").on("click", exportBackup);
@@ -441,6 +543,9 @@ $(function () {
     event.preventDefault();
     saveTimingFromForm();
   });
+
+  $("#autoRunToggle, #shuffleToggle").on("change", savePracticeSettingsFromForm);
+  $("#orderFirstSelect, #orderSecondSelect, #orderThirdSelect").on("change", savePracticeSettingsFromForm);
 
   $("#clearAllBtn").on("click", clearAllRecords);
   $("#deleteSelectedBtn").on("click", deleteSelectedRecords);
@@ -481,16 +586,14 @@ $(function () {
   });
 
   $("#resetPracticeBtn").on("click", function () {
-    rebuildPracticeOrder();
+    if (!appState.practiceOrder.length) {
+      rebuildPracticeOrder();
+    } else {
+      appState.practicePointer = 0;
+      syncCurrentPracticeRecord();
+    }
     previewCurrentRecord();
-  });
-
-  $("#prevPracticeBtn").on("click", function () {
-    setPointer(appState.practicePointer - 1);
-  });
-
-  $("#nextPracticeBtn").on("click", function () {
-    setPointer(appState.practicePointer + 1);
+    maybeAutoRun();
   });
 
   $(document).on("click", ".practice-result-btn", function () {
