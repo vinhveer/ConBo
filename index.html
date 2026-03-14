@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reading Mobile Lab</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="phone-app">
+      <header class="app-header">
+        <div>
+          <p class="app-kicker">Practice app</p>
+          <h1>Luyện đọc</h1>
+        </div>
+      </header>
+
+      <nav class="tabbar">
+        <button class="tabbar-btn active" data-screen="settings">Thiết đặt hệ thống</button>
+        <button class="tabbar-btn" data-screen="practice">Thực hành</button>
+      </nav>
+
+      <main class="app-main">
+        <section class="screen active" id="settingsScreen">
+          <section class="sheet">
+            <div class="sheet-head">
+              <h2>Thiết đặt giây</h2>
+            </div>
+
+            <form id="timingForm" class="compact-form">
+              <label class="field">
+                <span>Chữ đầu</span>
+                <input type="number" id="initialSecondsInput" min="0.2" step="0.1" />
+              </label>
+
+              <label class="field">
+                <span>Ẩn</span>
+                <input type="number" id="hideSecondsInput" min="0.1" step="0.1" />
+              </label>
+
+              <label class="field">
+                <span>Vần</span>
+                <input type="number" id="rhymeSecondsInput" min="0.2" step="0.1" />
+              </label>
+
+              <button type="submit" class="primary-btn full-btn">Lưu thời gian</button>
+            </form>
+          </section>
+
+          <section class="sheet">
+            <div class="sheet-head">
+              <h2>Record</h2>
+              <span class="inline-badge" id="recordCountBadge">0</span>
+            </div>
+
+            <form id="recordForm" class="compact-form">
+              <input type="hidden" id="editId" />
+
+              <label class="field">
+                <span>Chữ đầu</span>
+                <input type="text" id="initialInput" placeholder="tr" maxlength="20" />
+              </label>
+
+              <label class="field">
+                <span>Vần</span>
+                <input type="text" id="rhymeInput" placeholder="ang" maxlength="20" />
+              </label>
+
+              <label class="field">
+                <span>Chữ</span>
+                <input type="text" id="wordInput" placeholder="trang" maxlength="60" />
+              </label>
+
+              <div class="button-row">
+                <button type="submit" class="primary-btn" id="saveRecordBtn">Lưu</button>
+                <button type="button" class="ghost-btn" id="resetFormBtn">Xóa form</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="sheet record-list-sheet">
+            <div class="sheet-head">
+              <h2>Danh sách</h2>
+            </div>
+
+            <div class="record-list" id="recordList"></div>
+            <div class="empty-note" id="settingsEmptyState">Chưa có record nào.</div>
+          </section>
+        </section>
+
+        <section class="screen" id="practiceScreen">
+          <section class="sheet stats-strip" id="practiceStats">
+            <span id="summaryTotal">0 record</span>
+            <span id="summaryCorrect">0 đọc được</span>
+            <span id="summaryWrong">0 không đọc được</span>
+            <span id="summaryIndex">0 / 0</span>
+          </section>
+
+          <section class="sheet practice-controls">
+            <button class="primary-btn" id="startPracticeBtn">Bắt đầu</button>
+            <button class="ghost-btn" id="nextPracticeBtn">Tiếp theo</button>
+          </section>
+
+          <section class="sheet practice-sheet">
+            <div class="practice-topline">
+              <span class="inline-badge" id="stageLabel">Sẵn sàng</span>
+              <span class="sequence-text" id="stageSequence">1.0s chữ đầu -> 0.3s ẩn -> 1.0s vần -> 0.3s ẩn -> chữ</span>
+            </div>
+
+            <div class="stage-box" id="stageDisplay">Nhấn Bắt đầu</div>
+
+            <div class="button-row hidden" id="resultActions">
+              <button class="success-btn" data-result="correct">Đọc được</button>
+              <button class="danger-btn" data-result="wrong">Không đọc được</button>
+            </div>
+
+            <p class="helper-text" id="practiceNote">
+              Nhập dữ liệu ở màn Thiết đặt hệ thống rồi qua đây để luyện.
+            </p>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script src="jquery-3.7.1.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
