@@ -1,8 +1,9 @@
-const RECORDS_KEY = "reading-mobile-records-v2";
-const TIMING_KEY = "reading-mobile-timing-v2";
+const RECORDS_KEY = "reading-bootstrap-records-v1";
+const TIMING_KEY = "reading-bootstrap-timing-v1";
 
 const appState = {
   records: [],
+  selectedIds: [],
   timing: {
     initialSeconds: 1,
     hideSeconds: 0.3,
@@ -11,7 +12,9 @@ const appState = {
   practiceOrder: [],
   practicePointer: 0,
   currentRecordId: null,
-  timers: []
+  timers: [],
+  recordModal: null,
+  timingModal: null
 };
 
 function loadJson(key, fallback) {
@@ -41,174 +44,202 @@ function resetTimers() {
 }
 
 function setScreen(screen) {
-  $(".tabbar-btn").removeClass("active");
-  $(`.tabbar-btn[data-screen="${screen}"]`).addClass("active");
-
-  $(".screen").removeClass("active");
-  screen === "settings" ? $("#settingsScreen").addClass("active") : $("#practiceScreen").addClass("active");
+  $(".nav-screen-btn").removeClass("active");
+  $(`.nav-screen-btn[data-screen="${screen}"]`).addClass("active");
+  $(".screen-section").addClass("d-none");
+  screen === "settings" ? $("#settingsScreen").removeClass("d-none") : $("#practiceScreen").removeClass("d-none");
 }
 
-function renderTiming() {
-  $("#initialSecondsInput").val(appState.timing.initialSeconds);
-  $("#hideSecondsInput").val(appState.timing.hideSeconds);
-  $("#rhymeSecondsInput").val(appState.timing.rhymeSeconds);
-  $("#stageSequence").text(
-    `${appState.timing.initialSeconds}s chữ đầu -> ${appState.timing.hideSeconds}s ẩn -> ${appState.timing.rhymeSeconds}s vần -> ${appState.timing.hideSeconds}s ẩn -> chữ`
-  );
-}
-
-function renderRecordList() {
-  $("#recordCountBadge").text(appState.records.length);
-  $("#settingsEmptyState").toggle(appState.records.length === 0);
-
-  if (!appState.records.length) {
-    $("#recordList").html("");
-    return;
+function getPracticeSourceIds() {
+  if (appState.selectedIds.length) {
+    return appState.records
+      .filter((record) => appState.selectedIds.includes(record.id))
+      .map((record) => record.id);
   }
-
-  const html = appState.records
-    .map(
-      (record) => `
-        <article class="record-item">
-          <div class="record-line">
-            <span class="record-word">${escapeHtml(record.word)}</span>
-            <span class="record-build">${escapeHtml(record.initial)} + ${escapeHtml(record.rhyme)}</span>
-          </div>
-          <div class="record-meta">
-            <span>Đọc được: ${record.correct || 0}</span>
-            <span>Không đọc được: ${record.wrong || 0}</span>
-          </div>
-          <div class="record-actions">
-            <button class="mini-btn" data-action="edit" data-id="${record.id}">Sửa</button>
-            <button class="mini-btn delete" data-action="delete" data-id="${record.id}">Xóa</button>
-          </div>
-        </article>
-      `
-    )
-    .join("");
-
-  $("#recordList").html(html);
+  return appState.records.map((record) => record.id);
 }
 
-function renderStats() {
-  const total = appState.records.length;
-  const correct = appState.records.reduce((sum, record) => sum + (record.correct || 0), 0);
-  const wrong = appState.records.reduce((sum, record) => sum + (record.wrong || 0), 0);
-  const totalOrder = appState.practiceOrder.length || total;
-  const current = appState.currentRecordId ? Math.min(appState.practicePointer + 1, totalOrder) : 0;
-
-  $("#summaryTotal").text(`${total} record`);
-  $("#summaryCorrect").text(`${correct} đọc được`);
-  $("#summaryWrong").text(`${wrong} không đọc được`);
-  $("#summaryIndex").text(`${current} / ${totalOrder || 0}`);
-}
-
-function clearPracticeStage(message = "Nhấn Bắt đầu") {
-  resetTimers();
-  appState.currentRecordId = null;
-  $("#stageLabel").text("Sẵn sàng");
-  $("#stageDisplay").removeClass("stage-hidden stage-final").text(message);
-  $("#resultActions").addClass("hidden");
-  $("#practiceNote").text("Nhập dữ liệu ở màn Thiết đặt hệ thống rồi qua đây để luyện.");
-  renderStats();
-}
-
-function buildPracticeOrder() {
-  const ids = appState.records.map((record) => record.id);
-  for (let i = ids.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [ids[i], ids[j]] = [ids[j], ids[i]];
+function rebuildPracticeOrder(resetPointer = true) {
+  appState.practiceOrder = getPracticeSourceIds();
+  if (resetPointer || appState.practicePointer >= appState.practiceOrder.length) {
+    appState.practicePointer = 0;
   }
-  appState.practiceOrder = ids;
-  appState.practicePointer = 0;
+  syncCurrentPracticeRecord();
+}
+
+function syncCurrentPracticeRecord() {
+  appState.currentRecordId = appState.practiceOrder[appState.practicePointer] || null;
 }
 
 function getCurrentRecord() {
-  const id = appState.practiceOrder[appState.practicePointer];
-  return appState.records.find((record) => record.id === id) || null;
+  return appState.records.find((record) => record.id === appState.currentRecordId) || null;
 }
 
-function runPractice(record) {
+function renderTimingForm() {
+  $("#initialSecondsInput").val(appState.timing.initialSeconds);
+  $("#hideSecondsInput").val(appState.timing.hideSeconds);
+  $("#rhymeSecondsInput").val(appState.timing.rhymeSeconds);
+}
+
+function renderSelectionSummary() {
+  const count = appState.selectedIds.length;
+  $("#selectionSummary").text(
+    count
+      ? `Đang chọn ${count} dòng. Phần Thực hành sẽ dùng đúng các dòng này.`
+      : "Đang chọn 0 dòng. Nếu có chọn, phần Thực hành sẽ dùng các dòng này."
+  );
+
+  $("#editSelectedBtn").prop("disabled", count !== 1);
+  $("#deleteSelectedBtn").prop("disabled", count === 0);
+}
+
+function renderTable() {
+  const rows = appState.records
+    .map((record) => {
+      const selected = appState.selectedIds.includes(record.id);
+      return `
+        <tr class="selectable-row ${selected ? "row-selected" : ""}" data-id="${record.id}">
+          <td>
+            <input class="form-check-input row-checkbox" type="checkbox" data-id="${record.id}" ${selected ? "checked" : ""} />
+          </td>
+          <td>${escapeHtml(record.initial)}</td>
+          <td>${escapeHtml(record.rhyme)}</td>
+          <td>${escapeHtml(record.word)}</td>
+          <td>${record.correct || 0}</td>
+          <td>${record.wrong || 0}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  $("#recordsTableBody").html(rows);
+  $("#emptyTableState").toggleClass("d-none", appState.records.length > 0);
+  $("#selectAllRows").prop(
+    "checked",
+    appState.records.length > 0 && appState.selectedIds.length === appState.records.length
+  );
+  renderSelectionSummary();
+}
+
+function renderPracticeInfo(message) {
+  if (message) {
+    $("#practiceInfo").text(message);
+    return;
+  }
+
+  const total = appState.practiceOrder.length || getPracticeSourceIds().length;
+  const current = appState.currentRecordId ? appState.practicePointer + 1 : 0;
+  const sourceText = appState.selectedIds.length
+    ? `đang luyện ${appState.selectedIds.length} dòng đã chọn`
+    : `đang luyện toàn bộ ${appState.records.length} dòng`;
+
+  $("#practiceInfo").text(total ? `${sourceText} | vị trí ${current}/${total}` : "Chưa có dữ liệu luyện tập.");
+}
+
+function setStage(label, text, mode = "") {
+  $("#stageLabel").text(label);
+  $("#stageDisplay")
+    .removeClass("stage-hidden stage-final")
+    .toggleClass("stage-hidden", mode === "hidden")
+    .toggleClass("stage-final", mode === "final")
+    .text(text);
+}
+
+function setPracticeButtons(enabled) {
+  $(".practice-result-btn").prop("disabled", !enabled);
+}
+
+function previewCurrentRecord() {
+  resetTimers();
+  setPracticeButtons(false);
+
+  if (!appState.records.length) {
+    appState.currentRecordId = null;
+    setStage("Sẵn sàng", "|");
+    renderPracticeInfo("Chưa có dữ liệu luyện tập.");
+    return;
+  }
+
+  if (!appState.practiceOrder.length) {
+    rebuildPracticeOrder();
+  }
+
+  syncCurrentPracticeRecord();
+  const record = getCurrentRecord();
+  if (!record) {
+    setStage("Sẵn sàng", "|");
+    renderPracticeInfo("Không tìm thấy record để luyện.");
+    return;
+  }
+
+  setStage("Sẵn sàng", "|");
+  renderPracticeInfo(`Chuẩn bị: ${record.initial} + ${record.rhyme} -> ${record.word}`);
+}
+
+function runPractice() {
+  if (!appState.records.length) {
+    previewCurrentRecord();
+    return;
+  }
+
+  if (!appState.practiceOrder.length) {
+    rebuildPracticeOrder();
+  }
+
+  syncCurrentPracticeRecord();
+  const record = getCurrentRecord();
+  if (!record) {
+    previewCurrentRecord();
+    return;
+  }
+
   const initialMs = appState.timing.initialSeconds * 1000;
   const hideMs = appState.timing.hideSeconds * 1000;
   const rhymeMs = appState.timing.rhymeSeconds * 1000;
 
   resetTimers();
-  appState.currentRecordId = record.id;
-  renderStats();
+  setPracticeButtons(false);
+  renderPracticeInfo(`Đang chạy: ${record.initial} + ${record.rhyme} -> ${record.word}`);
 
-  $("#resultActions").addClass("hidden");
-  $("#practiceNote").text(`Record: ${record.initial} + ${record.rhyme} -> ${record.word}`);
-
-  $("#stageLabel").text("Chữ đầu");
-  $("#stageDisplay").removeClass("stage-hidden stage-final").text(record.initial);
+  setStage("Chữ đầu", record.initial);
 
   appState.timers.push(
     setTimeout(() => {
-      $("#stageDisplay").addClass("stage-hidden").text("•");
+      setStage("Ẩn", "|", "hidden");
     }, initialMs)
   );
 
   appState.timers.push(
     setTimeout(() => {
-      $("#stageLabel").text("Vần");
-      $("#stageDisplay").removeClass("stage-hidden stage-final").text(record.rhyme);
+      setStage("Vần", record.rhyme);
     }, initialMs + hideMs)
   );
 
   appState.timers.push(
     setTimeout(() => {
-      $("#stageDisplay").addClass("stage-hidden").text("•");
+      setStage("Ẩn", "|", "hidden");
     }, initialMs + hideMs + rhymeMs)
   );
 
   appState.timers.push(
     setTimeout(() => {
-      $("#stageLabel").text("Chữ");
-      $("#stageDisplay").removeClass("stage-hidden").addClass("stage-final").text(record.word);
-      $("#resultActions").removeClass("hidden");
-      $("#practiceNote").text("Chọn kết quả sau khi bé đọc xong.");
+      setStage("Chữ", record.word, "final");
+      setPracticeButtons(true);
     }, initialMs + hideMs + rhymeMs + hideMs)
   );
 }
 
-function nextPractice(forceRestart = false) {
-  if (!appState.records.length) {
-    clearPracticeStage("Chưa có record");
-    $("#practiceNote").text("Hãy nhập record ở màn Thiết đặt hệ thống.");
-    return;
-  }
-
-  if (!appState.practiceOrder.length || forceRestart || appState.practicePointer >= appState.practiceOrder.length) {
-    buildPracticeOrder();
-  }
-
-  const record = getCurrentRecord();
-  if (!record) {
-    clearPracticeStage("Không tìm thấy record");
-    return;
-  }
-
-  runPractice(record);
+function openRecordModal(record = null) {
+  $("#recordModalTitle").text(record ? "Sửa từ" : "Thêm từ mới");
+  $("#saveRecordBtn").text(record ? "Cập nhật" : "Lưu");
+  $("#editId").val(record ? record.id : "");
+  $("#initialInput").val(record ? record.initial : "");
+  $("#rhymeInput").val(record ? record.rhyme : "");
+  $("#wordInput").val(record ? record.word : "");
+  appState.recordModal.show();
 }
 
-function resetForm() {
-  $("#editId").val("");
-  $("#initialInput").val("").focus();
-  $("#rhymeInput").val("");
-  $("#wordInput").val("");
-  $("#saveRecordBtn").text("Lưu");
-}
-
-function fillForm(record) {
-  $("#editId").val(record.id);
-  $("#initialInput").val(record.initial);
-  $("#rhymeInput").val(record.rhyme);
-  $("#wordInput").val(record.word);
-  $("#saveRecordBtn").text("Cập nhật");
-}
-
-function upsertRecord() {
+function handleSaveRecord() {
   const editId = $("#editId").val();
   const payload = {
     initial: $("#initialInput").val().trim(),
@@ -226,7 +257,7 @@ function upsertRecord() {
       record.id === editId ? { ...record, ...payload } : record
     );
   } else {
-    appState.records.unshift({
+    appState.records.push({
       id: uid(),
       ...payload,
       correct: 0,
@@ -235,23 +266,44 @@ function upsertRecord() {
   }
 
   saveRecords();
-  renderRecordList();
-  renderStats();
-  resetForm();
+  rebuildPracticeOrder();
+  renderTable();
+  previewCurrentRecord();
+  appState.recordModal.hide();
 }
 
-function deleteRecord(id) {
-  appState.records = appState.records.filter((record) => record.id !== id);
-  appState.practiceOrder = appState.practiceOrder.filter((recordId) => recordId !== id);
-
-  if (appState.currentRecordId === id) {
-    clearPracticeStage();
-  } else {
-    renderStats();
+function deleteSelectedRecords() {
+  if (!appState.selectedIds.length) {
+    return;
   }
 
+  if (!window.confirm(`Xóa ${appState.selectedIds.length} dòng đã chọn?`)) {
+    return;
+  }
+
+  appState.records = appState.records.filter((record) => !appState.selectedIds.includes(record.id));
+  appState.selectedIds = [];
   saveRecords();
-  renderRecordList();
+  rebuildPracticeOrder();
+  renderTable();
+  previewCurrentRecord();
+}
+
+function clearAllRecords() {
+  if (!appState.records.length) {
+    return;
+  }
+
+  if (!window.confirm("Xóa toàn bộ dữ liệu?")) {
+    return;
+  }
+
+  appState.records = [];
+  appState.selectedIds = [];
+  saveRecords();
+  rebuildPracticeOrder();
+  renderTable();
+  previewCurrentRecord();
 }
 
 function saveTimingFromForm() {
@@ -260,7 +312,7 @@ function saveTimingFromForm() {
   const rhymeSeconds = Number($("#rhymeSecondsInput").val());
 
   if (initialSeconds <= 0 || hideSeconds <= 0 || rhymeSeconds <= 0) {
-    alert("Các giá trị giây phải lớn hơn 0.");
+    alert("Các giá trị thời gian phải lớn hơn 0.");
     return;
   }
 
@@ -269,41 +321,80 @@ function saveTimingFromForm() {
     hideSeconds,
     rhymeSeconds
   };
-
   saveTiming();
-  renderTiming();
+  appState.timingModal.hide();
 }
 
-function markResult(type) {
-  if (!appState.currentRecordId) {
+function toggleRowSelection(id, checked) {
+  if (checked) {
+    if (!appState.selectedIds.includes(id)) {
+      appState.selectedIds.push(id);
+    }
+  } else {
+    appState.selectedIds = appState.selectedIds.filter((selectedId) => selectedId !== id);
+  }
+
+  rebuildPracticeOrder();
+  renderTable();
+  previewCurrentRecord();
+}
+
+function setPointer(nextPointer) {
+  if (!appState.practiceOrder.length) {
+    rebuildPracticeOrder();
+  }
+  if (!appState.practiceOrder.length) {
+    previewCurrentRecord();
     return;
   }
 
-  appState.records = appState.records.map((record) => {
-    if (record.id !== appState.currentRecordId) {
-      return record;
-    }
+  appState.practicePointer = Math.max(0, Math.min(nextPointer, appState.practiceOrder.length - 1));
+  syncCurrentPracticeRecord();
+  previewCurrentRecord();
+}
 
-    return {
-      ...record,
-      correct: record.correct + (type === "correct" ? 1 : 0),
-      wrong: record.wrong + (type === "wrong" ? 1 : 0)
-    };
-  });
+function markResult(type) {
+  const record = getCurrentRecord();
+  if (!record) {
+    return;
+  }
+
+  appState.records = appState.records.map((item) =>
+    item.id === record.id
+      ? {
+          ...item,
+          correct: item.correct + (type === "correct" ? 1 : 0),
+          wrong: item.wrong + (type === "wrong" ? 1 : 0)
+        }
+      : item
+  );
 
   saveRecords();
-  renderRecordList();
-  $("#resultActions").addClass("hidden");
-  $("#practiceNote").text(type === "correct" ? "Đã lưu: đọc được." : "Đã lưu: không đọc được.");
+  renderTable();
 
-  appState.practicePointer += 1;
-  renderStats();
+  if (appState.practicePointer < appState.practiceOrder.length - 1) {
+    appState.practicePointer += 1;
+  }
+  syncCurrentPracticeRecord();
+  previewCurrentRecord();
+}
 
-  appState.timers.push(
-    setTimeout(() => {
-      nextPractice();
-    }, 450)
-  );
+function exportBackup() {
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    timing: appState.timing,
+    records: appState.records
+  };
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `luyen-doc-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }
 
 function escapeHtml(value) {
@@ -318,13 +409,32 @@ function escapeHtml(value) {
 $(function () {
   appState.records = loadJson(RECORDS_KEY, []);
   appState.timing = { ...appState.timing, ...loadJson(TIMING_KEY, {}) };
+  appState.recordModal = new bootstrap.Modal(document.getElementById("recordModal"));
+  appState.timingModal = new bootstrap.Modal(document.getElementById("timingModal"));
 
-  renderTiming();
-  renderRecordList();
-  clearPracticeStage();
+  renderTimingForm();
+  rebuildPracticeOrder();
+  renderTable();
+  previewCurrentRecord();
 
-  $(document).on("click", ".tabbar-btn", function () {
+  $(document).on("click", ".nav-screen-btn", function () {
     setScreen($(this).data("screen"));
+  });
+
+  $("#exportBackupBtn").on("click", exportBackup);
+
+  $("#addWordBtn").on("click", function () {
+    openRecordModal();
+  });
+
+  $("#timingSettingsBtn").on("click", function () {
+    renderTimingForm();
+    appState.timingModal.show();
+  });
+
+  $("#recordForm").on("submit", function (event) {
+    event.preventDefault();
+    handleSaveRecord();
   });
 
   $("#timingForm").on("submit", function (event) {
@@ -332,41 +442,58 @@ $(function () {
     saveTimingFromForm();
   });
 
-  $("#recordForm").on("submit", function (event) {
-    event.preventDefault();
-    upsertRecord();
+  $("#clearAllBtn").on("click", clearAllRecords);
+  $("#deleteSelectedBtn").on("click", deleteSelectedRecords);
+
+  $("#editSelectedBtn").on("click", function () {
+    if (appState.selectedIds.length !== 1) {
+      return;
+    }
+    const record = appState.records.find((item) => item.id === appState.selectedIds[0]);
+    if (record) {
+      openRecordModal(record);
+    }
   });
 
-  $("#resetFormBtn").on("click", function () {
-    resetForm();
+  $("#selectAllRows").on("change", function () {
+    appState.selectedIds = $(this).is(":checked") ? appState.records.map((record) => record.id) : [];
+    rebuildPracticeOrder();
+    renderTable();
+    previewCurrentRecord();
   });
 
-  $(document).on("click", ".mini-btn", function () {
-    const id = $(this).data("id");
-    const action = $(this).data("action");
-    const record = appState.records.find((item) => item.id === id);
+  $(document).on("change", ".row-checkbox", function (event) {
+    event.stopPropagation();
+    toggleRowSelection($(this).data("id"), $(this).is(":checked"));
+  });
 
-    if (action === "edit" && record) {
-      fillForm(record);
-      setScreen("settings");
+  $(document).on("click", ".selectable-row", function (event) {
+    if ($(event.target).is("input")) {
+      return;
     }
-
-    if (action === "delete") {
-      deleteRecord(id);
-    }
+    const checkbox = $(this).find(".row-checkbox");
+    checkbox.prop("checked", !checkbox.prop("checked")).trigger("change");
   });
 
   $("#startPracticeBtn").on("click", function () {
     setScreen("practice");
-    nextPractice(true);
+    runPractice();
+  });
+
+  $("#resetPracticeBtn").on("click", function () {
+    rebuildPracticeOrder();
+    previewCurrentRecord();
+  });
+
+  $("#prevPracticeBtn").on("click", function () {
+    setPointer(appState.practicePointer - 1);
   });
 
   $("#nextPracticeBtn").on("click", function () {
-    appState.practicePointer += 1;
-    nextPractice();
+    setPointer(appState.practicePointer + 1);
   });
 
-  $(document).on("click", "#resultActions button", function () {
+  $(document).on("click", ".practice-result-btn", function () {
     markResult($(this).data("result"));
   });
 });
