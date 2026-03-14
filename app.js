@@ -298,7 +298,7 @@ function runPractice() {
         appState.timers.push(
           setTimeout(() => {
             setPracticeButtons(true);
-          }, elapsedMs)
+          }, elapsedMs + durationMs)
         );
       } else {
         appState.timers.push(
