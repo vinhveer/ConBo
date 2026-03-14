@@ -21,6 +21,7 @@ const appState = {
   practiceSettings: {
     autoRun: false,
     shuffle: false,
+    showResultButtons: true,
     stageOrder: ["initial", "rhyme", "word"]
   },
   practiceOrder: [],
@@ -135,6 +136,7 @@ function renderTimingForm() {
 function renderPracticeSettings() {
   $("#autoRunToggle").prop("checked", appState.practiceSettings.autoRun);
   $("#shuffleToggle").prop("checked", appState.practiceSettings.shuffle);
+  $("#showResultButtonsToggle").prop("checked", appState.practiceSettings.showResultButtons);
   $("#orderFirstSelect").val(appState.practiceSettings.stageOrder[0]);
   $("#orderSecondSelect").val(appState.practiceSettings.stageOrder[1]);
   $("#orderThirdSelect").val(appState.practiceSettings.stageOrder[2]);
@@ -213,6 +215,10 @@ function setPracticeButtons(enabled) {
   $(".practice-result-btn").prop("disabled", !enabled);
 }
 
+function renderPracticeButtonsVisibility() {
+  $(".practice-result-btn").closest(".d-flex").toggleClass("d-none", !appState.practiceSettings.showResultButtons);
+}
+
 function getStageOrderLabels() {
   return appState.practiceSettings.stageOrder.map((field) => FIELD_META[field].label).join(" -> ");
 }
@@ -288,11 +294,23 @@ function runPractice() {
     );
 
     if (isLastStage) {
-      appState.timers.push(
-        setTimeout(() => {
-          setPracticeButtons(true);
-        }, elapsedMs)
-      );
+      if (appState.practiceSettings.showResultButtons) {
+        appState.timers.push(
+          setTimeout(() => {
+            setPracticeButtons(true);
+          }, elapsedMs)
+        );
+      } else {
+        appState.timers.push(
+          setTimeout(() => {
+            if (appState.practicePointer < appState.practiceOrder.length - 1) {
+              appState.practicePointer += 1;
+              syncCurrentPracticeRecord();
+              runPractice();
+            }
+          }, elapsedMs + durationMs)
+        );
+      }
       return;
     }
 
@@ -300,7 +318,7 @@ function runPractice() {
 
     appState.timers.push(
       setTimeout(() => {
-        setStage("Ẩn", "", "hidden");
+        setStage("", "", "hidden");
       }, elapsedMs)
     );
 
@@ -416,10 +434,12 @@ function savePracticeSettingsFromForm() {
   appState.practiceSettings = {
     autoRun: $("#autoRunToggle").is(":checked"),
     shuffle: $("#shuffleToggle").is(":checked"),
+    showResultButtons: $("#showResultButtonsToggle").is(":checked"),
     stageOrder
   };
 
   renderPracticeSettings();
+  renderPracticeButtonsVisibility();
   savePracticeSettings();
   rebuildPracticeOrder();
   previewCurrentRecord();
@@ -509,6 +529,7 @@ $(function () {
   applyTheme();
   renderTimingForm();
   renderPracticeSettings();
+  renderPracticeButtonsVisibility();
   rebuildPracticeOrder();
   renderTable();
   previewCurrentRecord();
@@ -544,7 +565,7 @@ $(function () {
     saveTimingFromForm();
   });
 
-  $("#autoRunToggle, #shuffleToggle").on("change", savePracticeSettingsFromForm);
+  $("#autoRunToggle, #shuffleToggle, #showResultButtonsToggle").on("change", savePracticeSettingsFromForm);
   $("#orderFirstSelect, #orderSecondSelect, #orderThirdSelect").on("change", savePracticeSettingsFromForm);
 
   $("#clearAllBtn").on("click", clearAllRecords);
